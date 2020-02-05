@@ -2,14 +2,20 @@
 // 1. cli: 接收命令
 // 2. 定义结构
 // 3. 存成本地的 json 数据
+use std::fs;
+use std::io::{self, prelude::*, BufReader};
+use std::path::Path;
 
 use clap::{Arg, App, SubCommand};
 use chrono;
 use chrono::prelude::*;
 
+use serde::{self, Deserialize, Serialize};
+use serde_json;
+
 type LocalDT = chrono::DateTime<chrono::Local>; 
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 struct TODOItem{
     create_time: LocalDT,
     check_time: Option<LocalDT>,
@@ -34,14 +40,31 @@ impl TODOItem{
 }
 
 
-struct DB{
-    path: Box<std::path::Path>,
-    items: Option<Vec<TODOItem>>,
+struct DB<T: AsRef<Path>>{
+    path: T,
+    items: Vec<TODOItem>,
 }
 
-impl DB {
-    pub fn load(&self){
-        
+impl<T: AsRef<Path>> DB<T> {
+    pub fn new(path: T) -> Self{
+        DB{
+            path,
+            items: vec![],
+        }
+    }
+
+    pub fn load(&mut self){
+        if !self.path.as_ref().exists(){
+            fs::File::create(&self.path).expect("create DB file failed");
+        } 
+        let db_file = fs::File::open(&self.path).expect("read DB file faild");
+        let buf = BufReader::new(db_file);
+        for line in buf.lines(){
+            let item: TODOItem = serde_json::from_str(&line.unwrap())
+                .expect("invalid string in DB file");
+            self.items.push(item);
+        }
+
     }
 
     pub fn save(&self){
